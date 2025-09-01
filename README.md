@@ -1,0 +1,2 @@
+# DiscordSpoilerGridGenerator
+四捨五入當個踩地雷生成器
