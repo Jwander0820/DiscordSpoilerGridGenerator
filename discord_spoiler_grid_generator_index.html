@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Discord 防雷方塊產生器 · Spoiler Grid Generator</title>
+  <meta name="description" content="在瀏覽器本地生成 Discord 的 ||spoiler|| 方塊矩陣，支援自訂表情與數量、尺寸、種子與分享連結。" />
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --panel: #16181d;
+      --ink: #e8e6e3;
+      --muted: #9aa4ad;
+      --accent: #7c5cff;
+      --accent-2: #4cc9f0;
+      --danger: #ff6b6b;
+      --ok: #00c853;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 20% -20%, #18222f 0%, var(--bg) 50%) no-repeat,
+                  radial-gradient(800px 600px at 120% 20%, #1d1535 0%, transparent 40%) no-repeat,
+                  var(--bg);
+      color: var(--ink);
+    }
+    .container { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .title { font-size: 28px; font-weight: 800; letter-spacing: .3px; margin: 0 0 18px; }
+    .sub { color: var(--muted); margin-bottom: 18px; }
+
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: color-mix(in lab, var(--panel) 92%, #000 8%); border: 1px solid #23262d;
+            border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,.35); padding: 18px; }
+    .card h2 { margin: 0 0 10px; font-size: 18px; }
+
+    .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; align-items: center; }
+    .row + .row { margin-top: 10px; }
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-5 { grid-column: span 5; }
+    .col-6 { grid-column: span 6; }
+    .col-7 { grid-column: span 7; }
+    .col-8 { grid-column: span 8; }
+    .col-9 { grid-column: span 9; }
+    .col-12 { grid-column: span 12; }
+    label { font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], select, textarea {
+      width: 100%; border: 1px solid #2a2f38; background: #0f1216; color: var(--ink);
+      padding: 10px 12px; border-radius: 12px; outline: none; transition: border .15s ease;
+    }
+    textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,92,255,.15); }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+    th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; }
+    td { padding: 0 6px; }
+
+    .token { width: 100%; }
+    .count { width: 110px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px;
+      font-weight: 700; letter-spacing: .2px; border: 1px solid #2b2f38; background: #12161d; color: var(--ink);
+      cursor: pointer; user-select: none; transition: transform .02s ease, background .2s ease, border .2s ease;
+    }
+    .btn:hover { background: #171c24; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: linear-gradient(180deg, #8e79ff, #6a4cff); border-color: #6a4cff; }
+    .btn.primary:hover { filter: brightness(1.04); }
+    .btn.ghost { background: transparent; border-color: #2b2f38; }
+    .btn.danger { background: linear-gradient(180deg, #ff8b8b, #ff6b6b); border-color: #ff6b6b; }
+
+    .btn.small { padding: 6px 10px; font-weight: 600; }
+
+    .badge { display: inline-flex; align-items: center; gap:6px; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #313641; background: #12161b; color: var(--muted); }
+    .badge.ok { border-color: #1f5131; color: #9af2b4; background: #0c1712; }
+    .badge.warn { border-color: #51421f; color: #ffe08a; background: #17130c; }
+    .badge.err { border-color: #5a2222; color: #ffb1b1; background: #190d0d; }
+
+    .flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .between { display:flex; align-items:center; justify-content:space-between; }
+
+    .footer { color: var(--muted); text-align: center; margin-top: 18px; font-size: 12px; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Discord 防雷方塊產生器</h1>
+    <div class="sub">輸入表情與數量、設定矩陣尺寸，按下「產生」即可取得可貼到 DC 的文字（每格會包成 <span class="mono">||…||</span>）。</div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>設定</h2>
+        <div class="row">
+          <div class="col-3">
+            <label for="rows">列 Rows</label>
+            <input type="number" id="rows" min="1" max="50" value="6" />
+          </div>
+          <div class="col-3">
+            <label for="cols">行 Cols</label>
+            <input type="number" id="cols" min="1" max="50" value="6" />
+          </div>
+          <div class="col-3">
+            <label for="seed">種子（可選，用於重現）</label>
+            <input type="text" id="seed" placeholder="任意字串即可重現同一排列" />
+          </div>
+          <div class="col-3">
+            <label for="fillMode">不足格填補策略</label>
+            <select id="fillMode">
+              <option value="repeat">重複隨機既有表情</option>
+              <option value="fallback">使用下方填補表情</option>
+              <option value="blank">留白（空 spoiler）</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label for="fallback">填補表情（當「不足格填補策略」選擇「使用下方填補表情」時生效）</label>
+            <input type="text" id="fallback" placeholder="例如：:o: " />
+          </div>
+          <div class="col-6">
+            <label for="joiner">列結尾換行（固定 \n）／格與格之間不加空白</label>
+            <input type="text" id="joiner" value="\n" disabled />
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+        <div class="between">
+          <h2 style="margin:0">表情與數量</h2>
+          <div class="flex">
+            <button id="btnAdd" class="btn small">＋ 新增一列</button>
+            <button id="btnQuick" class="btn small ghost">⇲ 快速貼上</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>表情 Token（可為 <span class="mono"><:name:id></span>、<span class="mono"><a:name:id></span> 或一般 emoji）</th>
+              <th style="width:120px">數量</th>
+              <th style="width:100px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="emojiBody"></tbody>
+        </table>
+
+        <div id="quickPanel" class="card" style="margin-top:12px; display:none">
+          <div class="between">
+            <div class="muted">每行一筆：<span class="mono">token \t 或 空白 或 逗號</span> 後接數量。例如 <span class="mono"><:shuangla:1412000818487496744> 3</span></div>
+            <button id="btnQuickApply" class="btn small primary">套用到表格</button>
+          </div>
+          <textarea id="quickInput" placeholder="<:seokhunter1:1401211645749100727> 35\n<:shuangla:1412000818487496744> 1"></textarea>
+        </div>
+
+        <div style="height:12px"></div>
+        <div class="flex">
+          <button id="btnGenerate" class="btn primary">⚡ 產生</button>
+          <button id="btnCopy" class="btn">📋 複製</button>
+          <button id="btnDownload" class="btn">💾 下載 .txt</button>
+          <button id="btnShare" class="btn ghost">🔗 產生分享連結</button>
+          <span id="stats" class="badge">—</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>輸出</h2>
+        <textarea id="output" placeholder="按下『產生』後會出現在這裡，直接貼到 Discord 訊息框即可"></textarea>
+        <div class="flex" style="margin-top:10px">
+          <span id="charCounter" class="badge">0 / 2000 字元</span>
+          <span id="warn" class="badge warn" style="display:none">超過 Discord 2000 字限制，請縮小尺寸或減少表情數量</span>
+        </div>
+        <div class="muted" style="margin-top:10px">
+          提示：Discord 格式會把相鄰格子寫成 <span class="mono">||A|| ||B||</span> 的連續樣式，實際上中間會顯示為 <span class="mono">||||</span>（結束與開始相接）。
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // --- 小工具：種子亂數（xmur3 + mulberry32） ---
+    function xmur3(str){ let h=1779033703^str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h^str.charCodeAt(i),3432918353); h=h<<13|h>>>19; } return function(){ h=Math.imul(h^ (h>>>16), 2246822507); h=Math.imul(h^ (h>>>13), 3266489909); return (h^ (h>>>16)) >>> 0; } }
+    function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } }
+    function rngFromSeed(seed){ if(!seed) return Math.random; const seedFn = xmur3(seed); return mulberry32(seedFn()); }
+    function shuffleInPlace(arr, rnd){ for(let i=arr.length-1;i>0;i--){ const j = Math.floor(rnd()* (i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+    // --- DOM 快捷 ---
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
+
+    const tbody = $('#emojiBody');
+    const rowsEl = $('#rows');
+    const colsEl = $('#cols');
+    const seedEl = $('#seed');
+    const fillModeEl = $('#fillMode');
+    const fallbackEl = $('#fallback');
+    const outputEl = $('#output');
+    const statsEl = $('#stats');
+    const counterEl = $('#charCounter');
+    const warnEl = $('#warn');
+
+    // --- 表格操作 ---
+    function addRow(token = '', count = 1){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="token" type="text" placeholder="例如：<:sealji:>" value="${token.replaceAll('"','&quot;')}"></td>
+        <td style="width:120px"><input class="count" type="number" min="1" max="9999" value="${Number(count)||1}"></td>
+        <td style="width:100px"><button class="btn small danger btnDel">刪除</button></td>
+      `;
+      tr.querySelector('.btnDel').addEventListener('click', () => { tr.remove(); refreshStats(); });
+      tbody.appendChild(tr);
+      refreshStats();
+    }
+
+    function collectItems(){
+      const items = [];
+      $$('#emojiBody tr').forEach(tr => {
+        const token = tr.querySelector('.token').value.trim();
+        const count = Math.max(0, Math.floor(Number(tr.querySelector('.count').value)) || 0);
+        if(token && count > 0) items.push({ token, count });
+      });
+      return items;
+    }
+
+    function sumCounts(items){ return items.reduce((a,b)=>a+b.count,0); }
+
+    function refreshStats(){
+      const items = collectItems();
+      const totalCells = Math.max(1, Number(rowsEl.value)||6) * Math.max(1, Number(colsEl.value)||6);
+      const want = sumCounts(items);
+      const diff = totalCells - want;
+      let badge = `${want} / ${totalCells} 格`;
+      if(diff === 0){ statsEl.className = 'badge ok'; badge += ' · 剛好'; }
+      else if(diff > 0){ statsEl.className = 'badge warn'; badge += ` · 尚缺 ${diff}`; }
+      else { statsEl.className = 'badge err'; badge += ` · 超出 ${-diff}`; }
+      statsEl.textContent = badge;
+    }
+
+    $('#btnAdd').addEventListener('click', () => addRow());
+
+    $('#btnQuick').addEventListener('click', () => {
+      const panel = $('#quickPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    $('#btnQuickApply').addEventListener('click', () => {
+      const text = $('#quickInput').value; if(!text.trim()) return;
+      const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      for(const line of lines){
+        const m = line.split(/\s+|,|\t/).filter(Boolean);
+        if(m.length >= 2){
+          const count = parseInt(m[m.length-1], 10);
+          const token = m.slice(0, m.length-1).join(' ');
+          if(!isNaN(count)) addRow(token, count);
+        }
+      }
+      $('#quickPanel').style.display = 'none';
+    });
+
+    // --- 產生器 ---
+    function generate(){
+      const R = Math.max(1, Number(rowsEl.value)||6);
+      const C = Math.max(1, Number(colsEl.value)||6);
+      const total = R * C;
+      const items = collectItems();
+      const want = sumCounts(items);
+      const fillMode = fillModeEl.value; // repeat | fallback | blank
+      const fallback = fallbackEl.value.trim();
+
+      // 準備池：先按數量展開
+      let pool = [];
+      for(const it of items){ for(let i=0;i<it.count;i++) pool.push(it.token); }
+
+      if(pool.length > total){
+        pool = pool.slice(0, total); // 超出就截斷
+      } else if(pool.length < total){
+        const need = total - pool.length;
+        if(fillMode === 'fallback'){
+          if(!fallback){ alert('請提供「填補表情」或改用其他填補策略'); return; }
+          for(let i=0;i<need;i++) pool.push(fallback);
+        } else if(fillMode === 'repeat'){
+          if(pool.length === 0){ alert('沒有可重複的表情，請新增至少一筆'); return; }
+          for(let i=0;i<need;i++) pool.push(pool[i % pool.length]);
+        } else if(fillMode === 'blank'){
+          for(let i=0;i<need;i++) pool.push(''); // 空 spoiler
+        }
+      }
+
+      // 依種子洗牌
+      const rnd = rngFromSeed(seedEl.value.trim());
+      shuffleInPlace(pool, rnd);
+
+      // 輸出：每格包成 ||token||，空白模式則為 "||||"
+      const rows = [];
+      for(let r=0;r<R;r++){
+        const rowTokens = pool.slice(r*C, (r+1)*C).map(tok => `||${tok}||`).join('');
+        rows.push(rowTokens);
+      }
+      const text = rows.join('\n');
+      outputEl.value = text;
+      updateCounter();
+    }
+
+    function updateCounter(){
+      const n = outputEl.value.length;
+      counterEl.textContent = `${n} / 2000 字元`;
+      warnEl.style.display = n > 2000 ? 'inline-flex' : 'none';
+    }
+
+    $('#btnGenerate').addEventListener('click', generate);
+    outputEl.addEventListener('input', updateCounter);
+    rowsEl.addEventListener('input', refreshStats);
+    colsEl.addEventListener('input', refreshStats);
+    tbody.addEventListener('input', refreshStats);
+
+    $('#btnCopy').addEventListener('click', async () => {
+      if(!outputEl.value) { generate(); }
+      try { await navigator.clipboard.writeText(outputEl.value); 
+        flashBadge('已複製到剪貼簿');
+      } catch(e) { alert('無法複製：' + e.message); }
+    });
+
+    $('#btnDownload').addEventListener('click', () => {
+      if(!outputEl.value) { generate(); }
+      const blob = new Blob([outputEl.value], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `spoiler_grid_${Date.now()}.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    function flashBadge(text){
+      statsEl.textContent = text; statsEl.className = 'badge ok';
+      setTimeout(refreshStats, 1200);
+    }
+
+    // --- 分享設定（URL hash，以 base64 保存 JSON，支援 Unicode） ---
+    function toShareLink(){
+      const cfg = {
+        R: Math.max(1, Number(rowsEl.value)||6),
+        C: Math.max(1, Number(colsEl.value)||6),
+        seed: seedEl.value || '',
+        fillMode: fillModeEl.value,
+        fallback: fallbackEl.value || '',
+        items: collectItems(),
+      };
+      const json = JSON.stringify(cfg);
+      const b64 = btoa(unescape(encodeURIComponent(json)));
+      const url = `${location.origin}${location.pathname}#cfg=${b64}`;
+      history.replaceState(null, '', url);
+      navigator.clipboard.writeText(url).then(()=>flashBadge('分享連結已複製')).catch(()=>{});
+    }
+    $('#btnShare').addEventListener('click', toShareLink);
+
+    function loadFromHash(){
+      const m = location.hash.match(/#cfg=([A-Za-z0-9+/=\-_]+)/);
+      if(!m) return;
+      try {
+        const json = decodeURIComponent(escape(atob(m[1])));
+        const cfg = JSON.parse(json);
+        rowsEl.value = cfg.R || 6; colsEl.value = cfg.C || 6; seedEl.value = cfg.seed || '';
+        fillModeEl.value = cfg.fillMode || 'repeat'; fallbackEl.value = cfg.fallback || '';
+        tbody.innerHTML = '';
+        (cfg.items || []).forEach(it => addRow(it.token || '', it.count || 1));
+        refreshStats();
+      } catch(err){ console.warn('讀取分享設定失敗', err); }
+    }
+
+    // --- 預設樣本（取自你的示例，方便上手） ---
+    function bootstrap(){
+      if(location.hash.startsWith('#cfg=')) { loadFromHash(); return; }
+      addRow(':o: ', 35);
+      addRow(':x: ', 1);
+      refreshStats();
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
